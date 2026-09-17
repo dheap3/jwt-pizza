@@ -13,7 +13,7 @@ jobs:
       - name: create static deployment file
         run: |
           mkdir dist
-          echo "<h1>Hey there, this is a pretty cool static page through GITHUB!</h1>" >> dist/index.html
+          echo "<h1>Hello github pages</h1>" >> dist/index.html
 
       - name: Update pages artifact
         uses: actions/upload-pages-artifact@v3
