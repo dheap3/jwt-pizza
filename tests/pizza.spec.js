@@ -489,6 +489,10 @@ test("admin dashboard lists users", async ({ page }) => {
   await expect(usersTable.locator("tr", { hasText: "Kai Chen" })).toContainText("diner");
   await expect(usersTable.locator("tr", { hasText: "Franny Franchisee" })).toContainText("diner, franchisee");
   await expect(usersTable.locator("tr", { hasText: "Ada Admin" })).toContainText("admin");
+
+  // The logged in admin can't delete themselves
+  await expect(usersTable.locator("tr", { hasText: "Kai Chen" }).getByRole("button", { name: "Delete" })).toBeVisible();
+  await expect(usersTable.locator("tr", { hasText: "Ada Admin" }).getByRole("button", { name: "Delete" })).toHaveCount(0);
 });
 
 test("admin dashboard filters users", async ({ page }) => {
@@ -534,6 +538,15 @@ test("admin dashboard pages through users", async ({ page }) => {
 
   await previous.click();
   await expect(usersTable.locator("tbody")).toContainText("Kai Chen");
+
+  // Filtering from page 2 starts back on page 1
+  await next.click();
+  await expect(usersTable.locator("tbody")).toContainText("Franny Franchisee");
+  await usersTable.getByPlaceholder("Filter users").fill("Kai");
+  const filterRequest = page.waitForRequest((req) => req.url().includes("page=1") && req.url().includes("name=*Kai*"));
+  await usersTable.getByRole("button", { name: "Submit" }).click();
+  await filterRequest;
+  await expect(previous).toBeDisabled();
 });
 
 test("admin dashboard deletes user", async ({ page }) => {
@@ -545,11 +558,55 @@ test("admin dashboard deletes user", async ({ page }) => {
   const kaiRow = usersTable.locator("tr", { hasText: "Kai Chen" });
   await expect(kaiRow).toBeVisible();
 
-  const deleteRequest = page.waitForRequest((req) => /\/api\/user\/\d+$/.test(req.url()) && req.method() === "DELETE");
   await kaiRow.getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByText("Sorry to see you go")).toBeVisible();
+  await expect(page.getByRole("main")).toContainText("Are you sure you want to delete Kai Chen?");
+  expect(new URL(page.url()).pathname).toBe("/admin-dashboard/delete-user");
+
+  const deleteRequest = page.waitForRequest((req) => /\/api\/user\/\d+$/.test(req.url()) && req.method() === "DELETE");
+  await page.getByRole("button", { name: "Delete" }).click();
   const req = await deleteRequest;
   expect(req.url()).toMatch(/\/api\/user\/3$/);
 
+  // Back on the admin dashboard without the deleted user
+  await expect(page.getByText("Mama Ricci's kitchen")).toBeVisible();
   await expect(kaiRow).toHaveCount(0);
   await expect(usersTable.locator("tbody tr")).toHaveCount(2);
+});
+
+test("admin dashboard delete user cancel keeps the filter", async ({ page }) => {
+  await basicInit(page);
+  await login(page, "a@jwt.com", "admin");
+  await headerNav(page).getByRole("link", { name: "Admin", exact: true }).click();
+
+  const usersTable = page.locator("table", { hasText: "Email" });
+  await usersTable.getByPlaceholder("Filter users").fill("Kai");
+  await usersTable.getByRole("button", { name: "Submit" }).click();
+  await expect(usersTable.locator("tbody tr")).toHaveCount(1);
+
+  await usersTable.locator("tr", { hasText: "Kai Chen" }).getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  // Back on the admin dashboard, still filtered and Kai was not deleted
+  await expect(page.getByText("Mama Ricci's kitchen")).toBeVisible();
+  await expect(usersTable.getByPlaceholder("Filter users")).toHaveValue("Kai");
+  await expect(usersTable.locator("tbody tr")).toHaveCount(1);
+  await expect(usersTable.locator("tbody tr")).toContainText("Kai Chen");
+});
+
+test("admin dashboard delete user shows error", async ({ page }) => {
+  await basicInit(page);
+  // Replaces the basicInit mock so the delete fails
+  await page.route(/\/api\/user\/(\d+)$/, async (route) => {
+    await route.fulfill({ status: 500, json: { message: "unable to delete user" } });
+  });
+  await login(page, "a@jwt.com", "admin");
+  await headerNav(page).getByRole("link", { name: "Admin", exact: true }).click();
+
+  await page.locator("table", { hasText: "Email" }).locator("tr", { hasText: "Kai Chen" }).getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete" }).click();
+
+  // Stays on the delete page and shows why
+  await expect(page.getByRole("main")).toContainText("unable to delete user");
+  expect(new URL(page.url()).pathname).toBe("/admin-dashboard/delete-user");
 });
