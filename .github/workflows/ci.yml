@@ -11,6 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.set_version.outputs.version }}
+    services:
+      mysql:
+        image: mysql:8.0.29
+        env:
+          MYSQL_ROOT_PASSWORD: tempdbpassword
+          MYSQL_DATABASE: pizza
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd "mysqladmin ping -ptempdbpassword" --health-interval 10s --health-start-period 10s --health-timeout 5s --health-retries 10
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -32,10 +42,48 @@ jobs:
           npm ci && npm run build
           cp dist/index.html dist/404.html
 
+      - name: Checkout backend
+        uses: actions/checkout@v4
+        with:
+          repository: dheap3/jwt-pizza-service
+          path: jwt-pizza-service
+
+      - name: Start backend
+        working-directory: jwt-pizza-service
+        run: |
+          npm ci
+          echo "module.exports = {
+            jwtSecret: 'ci-test-secret',
+            db: {
+              connection: {
+                host: '127.0.0.1',
+                user: 'root',
+                password: 'tempdbpassword',
+                database: 'pizza',
+                connectTimeout: 60000,
+              },
+              listPerPage: 10,
+            },
+            factory: {
+              url: 'https://pizza-factory.cs329.click',
+              apiKey: '${{ secrets.FACTORY_API_KEY }}',
+            },
+          };" > src/config.js
+          nohup npm start > backend.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/api/order/menu > /dev/null && echo "backend up" && exit 0
+            sleep 1
+          done
+          echo "backend failed to start"; cat backend.log; exit 1
+
       - name: Run tests
         run: |
           npx playwright install --with-deps chromium
           npm run test:coverage
+
+      - name: Show backend log
+        if: failure()
+        run: cat jwt-pizza-service/backend.log
 
       - name: Update coverage
         run: |
