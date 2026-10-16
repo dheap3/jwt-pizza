@@ -105,6 +105,26 @@ async function basicInit(page) {
     await route.fulfill({ json: loggedInUser });
   });
 
+  // List users
+  await page.route(/\/api\/user(\?.*)?$/, async (route) => {
+    expect(route.request().method()).toBe("GET");
+    const nameFilter = new URL(route.request().url()).searchParams.get("name").replaceAll("*", "");
+    const users = Object.values(validUsers).filter((user) => user.name.includes(nameFilter));
+    await route.fulfill({ json: { users, more: false } });
+  });
+
+  // Delete user
+  await page.route(/\/api\/user\/(\d+)$/, async (route) => {
+    expect(route.request().method()).toBe("DELETE");
+    const userId = route
+      .request()
+      .url()
+      .match(/\/api\/user\/(\d+)$/)[1];
+    const email = Object.keys(validUsers).find((email) => validUsers[email].id === userId);
+    delete validUsers[email];
+    await route.fulfill({ json: { message: "user deleted" } });
+  });
+
   await page.route("*/**/api/order/menu", async (route) => {
     const menuRes = [
       { id: 1, title: "Veggie", image: "pizza1.png", price: 0.0038, description: "A garden of delight" },
@@ -456,4 +476,80 @@ test("create franchise cancel", async ({ page }) => {
 
   await expect(page.getByText("Mama Ricci's kitchen")).toBeVisible();
   await expect(page.getByRole("main")).not.toContainText("Never Opened");
+});
+
+test("admin dashboard lists users", async ({ page }) => {
+  await basicInit(page);
+  await login(page, "a@jwt.com", "admin");
+  await headerNav(page).getByRole("link", { name: "Admin", exact: true }).click();
+
+  const usersTable = page.locator("table", { hasText: "Email" });
+  await expect(usersTable.locator("tbody tr")).toHaveCount(3);
+  await expect(usersTable.locator("tr", { hasText: "Kai Chen" })).toContainText("d@jwt.com");
+  await expect(usersTable.locator("tr", { hasText: "Kai Chen" })).toContainText("diner");
+  await expect(usersTable.locator("tr", { hasText: "Franny Franchisee" })).toContainText("diner, franchisee");
+  await expect(usersTable.locator("tr", { hasText: "Ada Admin" })).toContainText("admin");
+});
+
+test("admin dashboard filters users", async ({ page }) => {
+  await basicInit(page);
+  await login(page, "a@jwt.com", "admin");
+  await headerNav(page).getByRole("link", { name: "Admin", exact: true }).click();
+
+  const usersTable = page.locator("table", { hasText: "Email" });
+  await expect(usersTable.locator("tbody tr")).toHaveCount(3);
+
+  await usersTable.getByPlaceholder("Filter users").fill("Kai");
+  const filterRequest = page.waitForRequest((req) => req.url().includes("/api/user?") && req.url().includes("name=*Kai*"));
+  await usersTable.getByRole("button", { name: "Submit" }).click();
+  await filterRequest;
+
+  await expect(usersTable.locator("tbody tr")).toHaveCount(1);
+  await expect(usersTable.locator("tbody tr")).toContainText("Kai Chen");
+});
+
+test("admin dashboard pages through users", async ({ page }) => {
+  await basicInit(page);
+  // Replaces the basicInit mock so there is a second page of users
+  await page.route(/\/api\/user(\?.*)?$/, async (route) => {
+    const userPage = new URL(route.request().url()).searchParams.get("page");
+    if (userPage === "1") {
+      await route.fulfill({ json: { users: [{ id: "3", name: "Kai Chen", email: "d@jwt.com", roles: [{ role: "diner" }] }], more: true } });
+    } else {
+      await route.fulfill({ json: { users: [{ id: "5", name: "Franny Franchisee", email: "f@jwt.com", roles: [{ role: "diner" }] }], more: false } });
+    }
+  });
+  await login(page, "a@jwt.com", "admin");
+  await headerNav(page).getByRole("link", { name: "Admin", exact: true }).click();
+
+  const usersTable = page.locator("table", { hasText: "Email" });
+  const previous = usersTable.getByRole("button", { name: "«" });
+  const next = usersTable.getByRole("button", { name: "»" });
+  await expect(usersTable.locator("tbody")).toContainText("Kai Chen");
+  await expect(previous).toBeDisabled();
+
+  await next.click();
+  await expect(usersTable.locator("tbody")).toContainText("Franny Franchisee");
+  await expect(next).toBeDisabled();
+
+  await previous.click();
+  await expect(usersTable.locator("tbody")).toContainText("Kai Chen");
+});
+
+test("admin dashboard deletes user", async ({ page }) => {
+  await basicInit(page);
+  await login(page, "a@jwt.com", "admin");
+  await headerNav(page).getByRole("link", { name: "Admin", exact: true }).click();
+
+  const usersTable = page.locator("table", { hasText: "Email" });
+  const kaiRow = usersTable.locator("tr", { hasText: "Kai Chen" });
+  await expect(kaiRow).toBeVisible();
+
+  const deleteRequest = page.waitForRequest((req) => /\/api\/user\/\d+$/.test(req.url()) && req.method() === "DELETE");
+  await kaiRow.getByRole("button", { name: "Delete" }).click();
+  const req = await deleteRequest;
+  expect(req.url()).toMatch(/\/api\/user\/3$/);
+
+  await expect(kaiRow).toHaveCount(0);
+  await expect(usersTable.locator("tbody tr")).toHaveCount(2);
 });
