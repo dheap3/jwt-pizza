@@ -96,9 +96,9 @@ jobs:
         with:
           path: dist/
   deploy:
-  permissions:
-    id-token: write # Required for requesting the JWT
-    contents: read  # Required for actions/checkout
+    permissions:
+      id-token: write # Required for requesting the JWT
+      contents: read  # Required for actions/checkout
     runs-on: ubuntu-latest
     # This line tells GitHub to look in the 'production' environment for secrets
     environment: production 
