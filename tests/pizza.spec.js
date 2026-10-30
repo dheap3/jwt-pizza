@@ -604,6 +604,7 @@ test("admin dashboard delete user shows error", async ({ page }) => {
   await headerNav(page).getByRole("link", { name: "Admin", exact: true }).click();
 
   await page.locator("table", { hasText: "Email" }).locator("tr", { hasText: "Kai Chen" }).getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByText("Sorry to see you go")).toBeVisible();
   await page.getByRole("button", { name: "Delete" }).click();
 
   // Stays on the delete page and shows why
