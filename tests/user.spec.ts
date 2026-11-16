@@ -18,6 +18,10 @@ test.describe("updateUser", () => {
     await expect(page.getByRole("main")).toContainText("pizza diner");
   });
 
+  test.afterEach(async ({ page }) => {
+    await page.getByRole("link", { name: "Logout" }).click();
+  });
+
   // field: 0 = name, 1 = email, 2 = password
   async function editField(page: Page, field: number, value: string) {
     await page.getByRole("button", { name: "Edit" }).click();

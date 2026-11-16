@@ -9,8 +9,7 @@ export default defineConfig({
   reporter: 'html',
   timeout: 5000,
   use: {
-    // baseURL: 'http://localhost:5173',
-    baseURL: 'https://pizza-service.heapgames.click',
+    baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
   },
 
@@ -25,8 +24,7 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: 'npm run dev',
-    // url: 'http://localhost:5173',
-    url: 'https://pizza-service.heapgames.click',
+    url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 5000,
   },
