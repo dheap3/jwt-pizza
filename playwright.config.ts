@@ -9,7 +9,8 @@ export default defineConfig({
   reporter: 'html',
   timeout: 5000,
   use: {
-    baseURL: 'http://localhost:5173',
+    // baseURL: 'http://localhost:5173',
+    baseURL: 'https://pizza-service.heapgames.click',
     trace: 'on-first-retry',
   },
 
