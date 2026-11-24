@@ -67,6 +67,18 @@ jobs:
               url: 'https://pizza-factory.cs329.click',
               apiKey: '${{ secrets.FACTORY_API_KEY }}',
             },
+            metrics: {
+              source: 'jwt-pizza-service-ci',
+              endpointUrl: '${{ secrets.METRICS_ENDPOINT_URL }}',
+              accountId: '${{ secrets.METRICS_ACCOUNT_ID }}',
+              apiKey: '${{ secrets.METRICS_API_KEY }}',
+            },
+            logging: {
+              source: 'jwt-pizza-service-ci',
+              endpointUrl: '${{ secrets.LOGGING_ENDPOINT_URL }}',
+              accountId: '${{ secrets.LOGGING_ACCOUNT_ID }}',
+              apiKey: '${{ secrets.LOGGING_API_KEY }}',
+            },
           };" > src/config.js
           nohup npm start > backend.log 2>&1 &
           for i in $(seq 1 30); do
