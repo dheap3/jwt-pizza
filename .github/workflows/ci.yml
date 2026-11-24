@@ -37,6 +37,38 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           printf '{"version": "%s" }' "$version" > public/version.json
 
+      - name: Write config file
+        run: |
+          echo "module.exports = {
+            jwtSecret: '${{ secrets.JWT_SECRET }}',
+            db: {
+              connection: {
+                host: '127.0.0.1',
+                user: 'root',
+                password: 'tempdbpassword',
+                database: 'pizza',
+                connectTimeout: 60000,
+              },
+              listPerPage: 10,
+            },
+            factory: {
+              url: 'https://pizza-factory.cs329.click',
+              apiKey: '${{ secrets.FACTORY_API_KEY }}',
+            },
+                        metrics: {
+              source: 'jwt-pizza-service',
+              endpointUrl: '${{ secrets.METRICS_ENDPOINT_URL }}',
+              apiKey: '${{ secrets.METRICS_API_KEY }}',
+              accountId: '${{ secrets.METRIC_ACCOUNT_ID }}',
+            },
+            logging: {
+              source: 'jwt-pizza-service',
+              endpointUrl: '${{ secrets.LOGGING_ENDPOINT_URL }}',
+              accountId: '${{ secrets.LOGGING_ACCOUNT_ID }}',
+              apiKey: '${{ secrets.LOGGING_API_KEY }}',
+            },
+          };" > src/config.js
+
       - name: Build
         run: |
           npm ci && npm run build
